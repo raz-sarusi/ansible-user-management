@@ -1,0 +1,21 @@
+---
+- name: Manage users (role)
+  hosts: group_a
+  become: true
+  vars:
+    users_to_create:
+      - name: "deploy"
+        shell: "/bin/bash"
+        groups: ["sudo"]
+        pubkey: "ssh-ed25519 AAAA...PUT_YOUR_PUBLIC_KEY_HERE"
+        sudo_nopasswd: true
+
+      - name: "ci"
+        shell: "/usr/sbin/nologin"
+        groups: []
+        pubkey: ""
+        sudo_nopasswd: false
+    users_to_remove:
+      - "olduser"
+  roles:
+    - users

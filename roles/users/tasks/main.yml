@@ -1,0 +1,53 @@
+---
+
+- name: Collect all groups to ensure
+  ansible.builtin.set_fact:
+    _all_groups: "{{ users_to_create | map(attribute='groups') | list | flatten | unique }}"
+  when: users_to_create is defined
+
+- name: Ensure groups exist
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ _all_groups | default([]) }}"
+  when: _all_groups is defined and _all_groups | length > 0
+
+
+- name: Create users
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    shell: "{{ item.shell | default('/bin/bash') }}"
+    groups: "{{ (item.groups | default([])) | join(',') }}"
+    append: false
+    create_home: true
+    state: present
+    password: "{{ item.password_hash | default(omit) }}"
+  loop: "{{ users_to_create | default([]) }}"
+
+
+- name: Add authorized key (if provided)
+  ansible.builtin.authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ item.pubkey }}"
+    state: present
+  loop: "{{ users_to_create | default([]) }}"
+  when: item.pubkey is defined and item.pubkey | length > 0
+
+
+- name: Configure passwordless sudo (sudoers.d)
+  ansible.builtin.template:
+    src: "sudoers_user.j2"
+    dest: "/etc/sudoers.d/{{ item.name }}"
+    mode: "0440"
+    validate: "visudo -cf %s"
+  loop: "{{ users_to_create | default([]) }}"
+  when: item.sudo_nopasswd | default(false)
+
+
+- name: Remove users (with home)
+  ansible.builtin.user:
+    name: "{{ item }}"
+    state: absent
+    remove: true
+    force: true
+  loop: "{{ users_to_remove | default([]) }}"
